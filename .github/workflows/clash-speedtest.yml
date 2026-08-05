@@ -1,0 +1,43 @@
+name: Clash SpeedTest
+
+on:
+  schedule:
+    - cron: '17 3 * * *'  # 每天 UTC 3:17 自动运行
+  workflow_dispatch:       # 支持手动触发
+
+jobs:
+  speedtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: 安装 clash-speedtest
+        run: go install github.com/faceair/clash-speedtest@latest
+
+      - name: 运行测速并筛选
+        run: |
+          clash-speedtest \
+            -c "${{ secrets.SUB_URL }}" \
+            -output result.yaml \
+            -max-latency 800ms \
+            -min-download-speed 5 \
+            -rename
+
+      - name: 加密结果文件
+        run: |
+          openssl enc -aes-256-cbc -a -salt -pbkdf2 \
+            -in result.yaml \
+            -out result.yaml.enc \
+            -pass pass:"${{ secrets.ENCRYPT_PASSWORD }}"
+
+      - name: 推送加密文件到 Gist
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+        run: |
+          jq -n --arg content "$(<result.yaml.enc)" '{files: {"result.yaml.enc": {content: $content}}}' \
+            | gh api -X PATCH "gists/${{ secrets.GIST_ID }}" --input -
