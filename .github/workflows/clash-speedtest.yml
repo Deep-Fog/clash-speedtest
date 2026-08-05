@@ -19,6 +19,46 @@ jobs:
           chmod +x clash-speedtest
           sudo mv clash-speedtest /usr/local/bin/
 
+      - name: Check Subscriptions
+        env:
+          SUB_URL: ${{ secrets.SUB_URL }}
+        run: |
+          echo "=========================================="
+          echo "检查订阅链接..."
+          echo "=========================================="
+          i=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            url=$(echo "$line" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            if [[ -n "$url" && ! "$url" =~ ^# ]]; then
+              i=$((i+1))
+              echo ""
+              echo "--- 订阅 #$i ---"
+              echo "URL: ${url:0:80}..."
+              content=$(curl -sL --max-time 10 "$url" 2>&1)
+              if [ $? -ne 0 ]; then
+                echo "❌ 下载失败"
+                continue
+              fi
+              size=$(echo "$content" | wc -c)
+              echo "大小: $size bytes"
+              if echo "$content" | head -c 100 | grep -q "proxies:"; then
+                count=$(echo "$content" | grep -c "name:" || true)
+                echo "节点数(估算): $count"
+              elif echo "$content" | head -c 100 | grep -qE "^[A-Za-z0-9+/=]+$"; then
+                echo "Base64 编码，解码中..."
+                decoded=$(echo "$content" | base64 -d 2>/dev/null || echo "$content")
+                count=$(echo "$decoded" | grep -c "name:" || true)
+                echo "节点数(估算): $count"
+              else
+                echo "内容预览: $(echo "$content" | head -c 200)"
+              fi
+            fi
+          done <<< "$SUB_URL"
+          echo ""
+          echo "=========================================="
+          echo "共 $i 个订阅链接"
+          echo "=========================================="
+
       - name: Run clash Speedtest
         env:
           SUB_URL: ${{ secrets.SUB_URL }}
