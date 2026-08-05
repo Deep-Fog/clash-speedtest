@@ -12,10 +12,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 新增：下载并安装 clash-speedtest
       - name: Install clash-speedtest
         run: |
-          wget -O clash-speedtest https://github.com/faceair/clash-speedtest/releases/latest/download/clash-speedtest-linux-amd64
+          wget -O clash-speedtest.tar.gz https://github.com/faceair/clash-speedtest/releases/latest/download/clash-speedtest_Linux_x86_64.tar.gz
+          tar -xzf clash-speedtest.tar.gz
           chmod +x clash-speedtest
           sudo mv clash-speedtest /usr/local/bin/
 
