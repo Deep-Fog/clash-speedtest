@@ -1,16 +1,28 @@
-- name: Run Clash Speedtest
+name: Refactor Clash SpeedTest
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch: # 支持在 GitHub Actions 页面手动点击触发
+
+jobs:
+  speedtest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run clash Speedtest
         env:
           SUBSCRIPTION_URLS: ${{ secrets.SUBSCRIPTION_URLS }}
         run: |
           # 1. 定义参数数组
           ARGS=()
 
-          # 2. 逐行读取换行分割的订阅，去除空格，过滤空行和注释(#)
+          # 2. 逐行读取换行分割的订阅，去除首尾空格，过滤空行和注释(#)
           while IFS= read -r line || [ -n "$line" ]; do
-            # 清理首尾空格/制表符
             url=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             
-            # 过滤空行与 `#` 开头的注释
             if [[ -n "$url" && ! "$url" =~ ^# ]]; then
               ARGS+=("-c" "$url")
             fi
@@ -24,7 +36,7 @@
 
           echo "解析成功，共找到 $((${#ARGS[@]} / 2)) 个有效订阅源，开始执行测速..."
 
-          # 4. 安全地展开数组并执行测速
+          # 4. 执行测速
           clash-speedtest "${ARGS[@]}" \
             -output result.yaml \
             -max-latency 800ms \
