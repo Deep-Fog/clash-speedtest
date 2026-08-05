@@ -3,7 +3,7 @@ name: Refactor Clash SpeedTest
 on:
   schedule:
     - cron: '17 3 * * *'
-  workflow_dispatch: # 支持在 GitHub Actions 页面手动点击触发
+  workflow_dispatch:
 
 jobs:
   speedtest:
@@ -14,31 +14,33 @@ jobs:
 
       - name: Run clash Speedtest
         env:
-          SUBSCRIPTION_URLS: ${{ secrets.SUBSCRIPTION_URLS }}
+          SUB_URL: ${{ secrets.SUB_URL }}
         run: |
-          # 1. 定义参数数组
           ARGS=()
-
-          # 2. 逐行读取换行分割的订阅，去除首尾空格，过滤空行和注释(#)
           while IFS= read -r line || [ -n "$line" ]; do
             url=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-            
             if [[ -n "$url" && ! "$url" =~ ^# ]]; then
               ARGS+=("-c" "$url")
             fi
-          done <<< "$SUBSCRIPTION_URLS"
+          done <<< "$SUB_URL"
 
-          # 3. 检查是否有有效订阅
           if [ ${#ARGS[@]} -eq 0 ]; then
-            echo "::error::未发现有效的订阅链接，请检查 Secret 配置！"
+            echo "::error::未发现有效的订阅链接，请检查 Secret (SUB_URL) 配置！"
             exit 1
           fi
 
-          echo "解析成功，共找到 $((${#ARGS[@]} / 2)) 个有效订阅源，开始执行测速..."
-
-          # 4. 执行测速
           clash-speedtest "${ARGS[@]}" \
             -output result.yaml \
             -max-latency 800ms \
             -min-download-speed 5 \
             -rename
+
+      - name: Update Gist
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+        run: |
+          if [ -f "result.yaml" ]; then
+            gh gist edit "$GIST_ID" result.yaml
+          fi
