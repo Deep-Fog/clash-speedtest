@@ -19,68 +19,29 @@ jobs:
           chmod +x clash-speedtest
           sudo mv clash-speedtest /usr/local/bin/
 
-      - name: Check Subscriptions
-        env:
-          SUB_URL: ${{ secrets.SUB_URL }}
-        run: |
-          echo "=========================================="
-          echo "检查订阅链接..."
-          echo "=========================================="
-          i=0
-          while IFS= read -r line || [ -n "$line" ]; do
-            url=$(echo "$line" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-            if [[ -n "$url" && ! "$url" =~ ^# ]]; then
-              i=$((i+1))
-              echo ""
-              echo "--- 订阅 #$i ---"
-              echo "URL: ${url:0:80}..."
-              content=$(curl -sL --max-time 10 "$url" 2>&1)
-              if [ $? -ne 0 ]; then
-                echo "❌ 下载失败"
-                continue
-              fi
-              size=$(echo "$content" | wc -c)
-              echo "大小: $size bytes"
-              if echo "$content" | head -c 100 | grep -q "proxies:"; then
-                count=$(echo "$content" | grep -c "name:" || true)
-                echo "节点数(估算): $count"
-              elif echo "$content" | head -c 100 | grep -qE "^[A-Za-z0-9+/=]+$"; then
-                echo "Base64 编码，解码中..."
-                decoded=$(echo "$content" | base64 -d 2>/dev/null || echo "$content")
-                count=$(echo "$decoded" | grep -c "name:" || true)
-                echo "节点数(估算): $count"
-              else
-                echo "内容预览: $(echo "$content" | head -c 200)"
-              fi
-            fi
-          done <<< "$SUB_URL"
-          echo ""
-          echo "=========================================="
-          echo "共 $i 个订阅链接"
-          echo "=========================================="
-
       - name: Run clash Speedtest
         env:
           SUB_URL: ${{ secrets.SUB_URL }}
         run: |
-          ARGS=()
+          URLS=()
           while IFS= read -r line || [ -n "$line" ]; do
             url=$(echo "$line" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             if [[ -n "$url" && ! "$url" =~ ^# ]]; then
-              ARGS+=("-c" "$url")
+              URLS+=("$url")
             fi
           done <<< "$SUB_URL"
 
-          if [ ${#ARGS[@]} -eq 0 ]; then
+          if [ ${#URLS[@]} -eq 0 ]; then
             echo "::error::未发现有效的订阅链接，请检查 Secret (SUB_URL) 配置！"
             exit 1
           fi
 
+          CONFIG_LIST=$(IFS=,; echo "${URLS[*]}")
           echo "=========================================="
-          echo "解析到 $(( ${#ARGS[@]} / 2 )) 个订阅链接"
+          echo "解析到 ${#URLS[@]} 个订阅链接"
           echo "=========================================="
 
-          clash-speedtest "${ARGS[@]}" \
+          clash-speedtest -c "$CONFIG_LIST" \
             -output result.yaml \
             -max-latency 800ms \
             -min-download-speed 5 \
