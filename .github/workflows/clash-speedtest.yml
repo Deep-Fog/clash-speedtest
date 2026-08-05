@@ -25,7 +25,7 @@ jobs:
         run: |
           ARGS=()
           while IFS= read -r line || [ -n "$line" ]; do
-            url=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            url=$(echo "$line" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             if [[ -n "$url" && ! "$url" =~ ^# ]]; then
               ARGS+=("-c" "$url")
             fi
@@ -35,6 +35,10 @@ jobs:
             echo "::error::未发现有效的订阅链接，请检查 Secret (SUB_URL) 配置！"
             exit 1
           fi
+
+          echo "=========================================="
+          echo "解析到 $(( ${#ARGS[@]} / 2 )) 个订阅链接"
+          echo "=========================================="
 
           clash-speedtest "${ARGS[@]}" \
             -output result.yaml \
