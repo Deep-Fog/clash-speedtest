@@ -19,26 +19,40 @@ jobs:
           chmod +x clash-speedtest
           sudo mv clash-speedtest /usr/local/bin/
 
-      - name: Run clash Speedtest
+      - name: Download and Fix Subscriptions
         env:
           SUB_URL: ${{ secrets.SUB_URL }}
         run: |
-          URLS=()
+          mkdir -p configs
+          i=0
           while IFS= read -r line || [ -n "$line" ]; do
             url=$(echo "$line" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             if [[ -n "$url" && ! "$url" =~ ^# ]]; then
-              URLS+=("$url")
+              i=$((i+1))
+              echo "下载订阅 #$i..."
+              curl -sL --max-time 30 "$url" -o "configs/sub_$i.yaml"
+              size=$(wc -c < "configs/sub_$i.yaml")
+              echo "  大小: $size bytes"
+              # 修复 fingerprint 字段兼容性问题
+              sed -i 's/^\([[:space:]]*\)fingerprint:/\1client-fingerprint:/' "configs/sub_$i.yaml"
             fi
           done <<< "$SUB_URL"
 
-          if [ ${#URLS[@]} -eq 0 ]; then
-            echo "::error::未发现有效的订阅链接，请检查 Secret (SUB_URL) 配置！"
+          echo "=========================================="
+          echo "共下载 $i 个订阅文件"
+          echo "=========================================="
+
+      - name: Run clash Speedtest
+        run: |
+          CONFIG_LIST=$(find "$PWD/configs" -name "sub_*.yaml" -printf "%p," | sed 's/,$//')
+
+          if [ -z "$CONFIG_LIST" ]; then
+            echo "::error::未发现有效的订阅配置文件！"
             exit 1
           fi
 
-          CONFIG_LIST=$(IFS=,; echo "${URLS[*]}")
           echo "=========================================="
-          echo "解析到 ${#URLS[@]} 个订阅链接"
+          echo "配置文件: $CONFIG_LIST"
           echo "=========================================="
 
           clash-speedtest -c "$CONFIG_LIST" \
